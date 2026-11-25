@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
-import { loadSnapshot, type DatabaseSnapshot } from "@/lib/local-db";
+import { loadSnapshot, removeLegacyDummyData, type DatabaseSnapshot } from "@/lib/local-db";
 
 const EMPTY_SNAPSHOT: DatabaseSnapshot = {
   projects: [],
@@ -32,7 +32,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    void loadSnapshot()
+
+    if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+      void navigator.storage.persist().catch(() => {
+        // Ignore storage persistence denial
+      });
+    }
+
+    void removeLegacyDummyData()
+      .catch(() => {
+        // Ignore cleanup failure and proceed to load snapshot
+      })
+      .then(() => loadSnapshot())
       .then((nextSnapshot) => {
         if (active) {
           setSnapshot(nextSnapshot);

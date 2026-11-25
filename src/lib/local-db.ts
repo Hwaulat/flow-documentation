@@ -498,6 +498,100 @@ export async function saveLastBackupAt(value: string): Promise<void> {
   }
 }
 
+export async function removeLegacyDummyData(): Promise<void> {
+  const database = await openDatabase();
+  const readTx = database.transaction(["settings", "projects", "features", "points", "attachments"], "readonly");
+  const readDone = transactionResult(readTx);
+  let alreadyCleaned = false;
+  let dummyProjects: ProjectRecord[] = [];
+  let features: FeatureRecord[] = [];
+  let points: PointRecord[] = [];
+  let attachments: StoredAttachment[] = [];
+
+  try {
+    const marker = await requestResult<SettingRecord | undefined>(
+      readTx.objectStore("settings").get("dummyCleanupDoneV1"),
+    );
+    alreadyCleaned = marker?.value === "true";
+    if (!alreadyCleaned) {
+      [dummyProjects, features, points, attachments] = await Promise.all([
+        requestResult<ProjectRecord[]>(readTx.objectStore("projects").getAll()),
+        requestResult<FeatureRecord[]>(readTx.objectStore("features").getAll()),
+        requestResult<PointRecord[]>(readTx.objectStore("points").getAll()),
+        requestResult<StoredAttachment[]>(readTx.objectStore("attachments").getAll()),
+      ]);
+    }
+    await readDone;
+  } finally {
+    database.close();
+  }
+
+  if (alreadyCleaned) return;
+
+  const targetProjectIds = new Set(
+    dummyProjects
+      .filter(
+        (project) =>
+          project.name === "Portal Klaim & Penagihan Pelanggan" &&
+          project.customerName === "PT Nusantara Logistik",
+      )
+      .map((project) => project.id),
+  );
+  const targetFeatureIds = new Set(
+    features
+      .filter((feature) => targetProjectIds.has(feature.projectId))
+      .map((feature) => feature.id),
+  );
+  const targetPointIds = new Set(
+    points
+      .filter((point) => targetFeatureIds.has(point.featureId))
+      .map((point) => point.id),
+  );
+  const targetAttachmentIds = attachments
+    .filter((attachment) => {
+      if (attachment.ownerType === "project" && targetProjectIds.has(attachment.ownerId)) return true;
+      if (attachment.ownerType === "feature" && targetFeatureIds.has(attachment.ownerId)) return true;
+      return attachment.ownerType === "point" && targetPointIds.has(attachment.ownerId);
+    })
+    .map((attachment) => attachment.id);
+
+  const writeDb = await openDatabase();
+  const writeTx = writeDb.transaction(
+    ["projects", "features", "points", "attachments", "settings"],
+    "readwrite",
+  );
+  const writeDone = transactionResult(writeTx);
+  try {
+    for (const id of targetProjectIds) writeTx.objectStore("projects").delete(id);
+    for (const id of targetFeatureIds) writeTx.objectStore("features").delete(id);
+    for (const id of targetPointIds) writeTx.objectStore("points").delete(id);
+    for (const id of targetAttachmentIds) writeTx.objectStore("attachments").delete(id);
+    writeTx.objectStore("settings").put({
+      key: "dummyCleanupDoneV1",
+      value: "true",
+    } satisfies SettingRecord);
+    await writeDone;
+  } finally {
+    writeDb.close();
+  }
+}
+
+export async function clearAllLocalData(): Promise<void> {
+  const database = await openDatabase();
+  const transaction = database.transaction([...STORE_NAMES], "readwrite");
+  const done = transactionResult(transaction);
+  try {
+    for (const storeName of STORE_NAMES) transaction.objectStore(storeName).clear();
+    transaction.objectStore("settings").put({
+      key: "dummyCleanupDoneV1",
+      value: "true",
+    } satisfies SettingRecord);
+    await done;
+  } finally {
+    database.close();
+  }
+}
+
 export async function replaceAllData(
   snapshot: DatabaseSnapshot,
   attachments: StoredAttachment[],

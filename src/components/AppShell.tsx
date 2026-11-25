@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         data-print-hide="true"
         className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-md"
       >
-        <div className="mx-auto flex h-15 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="flex h-15 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3 md:gap-6">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
@@ -245,7 +245,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      <main className="w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</main>
 
       <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>

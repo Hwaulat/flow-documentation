@@ -21,6 +21,42 @@ function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
+function readBlobBytes(blob: Blob): Promise<Uint8Array> {
+  if (typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer().then((buffer) => new Uint8Array(buffer));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(new Uint8Array(reader.result));
+      } else {
+        reject(new Error("Gagal membaca data biner."));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Gagal membaca file."));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function readBlobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === "function") {
+    return blob.text();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Gagal membaca isi teks file."));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Gagal membaca file teks."));
+    reader.readAsText(blob);
+  });
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -48,7 +84,7 @@ export async function createBackupArchive(): Promise<Blob> {
   for (const attachment of snapshot.attachments) {
     const stored = await getAttachment(attachment.id);
     if (!stored) throw new Error(`Lampiran “${attachment.originalName}” tidak ditemukan.`);
-    files[`attachments/${attachment.id}`] = new Uint8Array(await stored.blob.arrayBuffer());
+    files[`attachments/${attachment.id}`] = await readBlobBytes(stored.blob);
   }
 
   const bytes = zipSync(files, { level: 6 });
@@ -63,7 +99,7 @@ export async function createJsonExport(): Promise<Blob> {
       if (!stored) throw new Error(`Lampiran “${attachment.originalName}” tidak ditemukan.`);
       return {
         ...attachment,
-        dataBase64: bytesToBase64(new Uint8Array(await stored.blob.arrayBuffer())),
+        dataBase64: bytesToBase64(await readBlobBytes(stored.blob)),
       };
     }),
   );
@@ -74,7 +110,7 @@ export async function createJsonExport(): Promise<Blob> {
 }
 
 export async function restoreBackupArchive(file: File): Promise<void> {
-  const archive = unzipSync(new Uint8Array(await file.arrayBuffer()));
+  const archive = unzipSync(await readBlobBytes(file));
   const manifestBytes = archive["manifest.json"];
   if (!manifestBytes) throw new Error("Cadangan ini tidak memiliki manifest yang valid.");
 
@@ -129,7 +165,7 @@ export async function createProjectMarkdownArchive(projectId: string): Promise<B
     if (!stored) continue;
     const extension = attachment.originalName.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "") || "img";
     const path = `attachments/${attachment.id}.${extension}`;
-    files[path] = new Uint8Array(await stored.blob.arrayBuffer());
+    files[path] = await readBlobBytes(stored.blob);
     markdown.push(`![${attachment.caption || attachment.originalName}](${path})`, "");
   }
 
@@ -143,7 +179,7 @@ export async function createProjectMarkdownArchive(projectId: string): Promise<B
       if (!stored) continue;
       const extension = attachment.originalName.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "") || "img";
       const path = `attachments/${attachment.id}.${extension}`;
-      files[path] = new Uint8Array(await stored.blob.arrayBuffer());
+      files[path] = await readBlobBytes(stored.blob);
       markdown.push(`![${attachment.caption || attachment.originalName}](${path})`, "");
     }
 
@@ -161,7 +197,7 @@ export async function createProjectMarkdownArchive(projectId: string): Promise<B
         if (!stored) continue;
         const extension = attachment.originalName.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "") || "img";
         const path = `attachments/${attachment.id}.${extension}`;
-        files[path] = new Uint8Array(await stored.blob.arrayBuffer());
+        files[path] = await readBlobBytes(stored.blob);
         markdown.push(`  - ![${attachment.caption || attachment.originalName}](${path})`);
       }
     }
@@ -197,7 +233,7 @@ export async function restoreBackupFile(file: File): Promise<void> {
   if (file.name.toLowerCase().endsWith(".json") || file.type === "application/json") {
     let payload: JsonExportPayload;
     try {
-      payload = JSON.parse(await file.text()) as JsonExportPayload;
+      payload = JSON.parse(await readBlobText(file)) as JsonExportPayload;
     } catch {
       throw new Error("File JSON tidak dapat dibaca.");
     }

@@ -183,6 +183,14 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
   function openResult(result: SearchResult) {
     onOpenChange(false);
+    if ((result.kind === "feature" || result.kind === "point") && result.featureId) {
+      void navigate({
+        to: "/projects/$projectId/features/$featureId",
+        params: { projectId: result.projectId, featureId: result.featureId },
+        search: { target: result.targetId },
+      });
+      return;
+    }
     void navigate({
       to: "/projects/$projectId",
       params: { projectId: result.projectId },
@@ -210,7 +218,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl gap-0 overflow-hidden p-0 sm:rounded-2xl"
+        className="gap-0 overflow-hidden p-0 sm:rounded-2xl"
         onKeyDown={handleKeyDown}
       >
         <DialogHeader className="sr-only">

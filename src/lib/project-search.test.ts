@@ -71,4 +71,22 @@ describe("searchDocumentation", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.id).toBe("point-1");
   });
+
+  it("matches points across parent project/feature context and speaker name", () => {
+    const crossResults = searchDocumentation(snapshot, "portal pdf");
+    expect(crossResults.some((item) => item.kind === "point" && item.id === "point-1")).toBe(true);
+
+    const speakerResults = searchDocumentation(snapshot, "din");
+    expect(speakerResults.some((item) => item.kind === "point" && item.id === "point-1")).toBe(true);
+  });
+
+  it("excludes soft-deleted projects, features, and points from search results", () => {
+    const trashedSnapshot: DatabaseSnapshot = {
+      ...snapshot,
+      points: snapshot.points.map((item) => ({ ...item, deletedAt: "2026-11-05T00:00:00.000Z" })),
+    };
+
+    const results = searchDocumentation(trashedSnapshot, "pdf");
+    expect(results).toHaveLength(0);
+  });
 });

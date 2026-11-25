@@ -172,6 +172,68 @@ export async function createProjectMarkdownArchive(projectId: string): Promise<B
   return new Blob([asArrayBuffer(zipSync(files, { level: 6 }))], { type: "application/zip" });
 }
 
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+interface JsonExportAttachment extends AttachmentRecord {
+  dataBase64: string;
+}
+
+interface JsonExportPayload {
+  formatVersion: 1;
+  exportedAt: string;
+  snapshot: Omit<DatabaseSnapshot, "attachments"> & {
+    attachments: JsonExportAttachment[];
+  };
+}
+
+export async function restoreBackupFile(file: File): Promise<void> {
+  if (file.name.toLowerCase().endsWith(".json") || file.type === "application/json") {
+    let payload: JsonExportPayload;
+    try {
+      payload = JSON.parse(await file.text()) as JsonExportPayload;
+    } catch {
+      throw new Error("File JSON tidak dapat dibaca.");
+    }
+    if (payload.formatVersion !== 1 || !payload.snapshot || !Array.isArray(payload.snapshot.projects)) {
+      throw new Error("Format file JSON cadangan tidak didukung.");
+    }
+    const attachments: StoredAttachment[] = (payload.snapshot.attachments ?? []).map(
+      ({ dataBase64, ...metadata }) => {
+        if (typeof dataBase64 !== "string") {
+          throw new Error(`Data gambar “${metadata.originalName}” tidak lengkap.`);
+        }
+        return {
+          ...metadata,
+          blob: new Blob([asArrayBuffer(base64ToBytes(dataBase64))], { type: metadata.mimeType }),
+        };
+      },
+    );
+    const snapshot: DatabaseSnapshot = {
+      projects: payload.snapshot.projects,
+      features: payload.snapshot.features ?? [],
+      points: payload.snapshot.points ?? [],
+      attachments: attachments.map(({ blob: _blob, ...meta }) => meta),
+      lastBackupAt: payload.snapshot.lastBackupAt ?? null,
+    };
+    await replaceAllData(snapshot, attachments);
+    return;
+  }
+
+  await restoreBackupArchive(file);
+}
+
+export function backupFileName(prefix: string, extension: string): string {
+  const datePart = new Date().toISOString().slice(0, 10);
+  return `${prefix}-${datePart}.${extension}`;
+}
+
 export function downloadFile(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

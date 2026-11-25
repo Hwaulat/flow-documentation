@@ -198,8 +198,16 @@ export async function saveFeature(record: FeatureRecord): Promise<void> {
   await saveRecord("features", record);
 }
 
+export async function saveFeatures(records: FeatureRecord[]): Promise<void> {
+  await saveRecords("features", records);
+}
+
 export async function savePoint(record: PointRecord): Promise<void> {
   await saveRecord("points", record);
+}
+
+export async function savePoints(records: PointRecord[]): Promise<void> {
+  await saveRecords("points", records);
 }
 
 export async function saveAttachment(record: StoredAttachment): Promise<void> {
@@ -213,6 +221,80 @@ async function saveRecord(storeName: (typeof STORE_NAMES)[number], record: unkno
   try {
     transaction.objectStore(storeName).put(record);
     await done;
+  } finally {
+    database.close();
+  }
+}
+
+async function saveRecords(storeName: (typeof STORE_NAMES)[number], records: unknown[]): Promise<void> {
+  if (records.length === 0) return;
+  const database = await openDatabase();
+  const transaction = database.transaction(storeName, "readwrite");
+  const done = transactionResult(transaction);
+  try {
+    const store = transaction.objectStore(storeName);
+    for (const record of records) store.put(record);
+    await done;
+  } finally {
+    database.close();
+  }
+}
+
+export async function touchProject(projectId: string): Promise<void> {
+  const database = await openDatabase();
+  const transaction = database.transaction("projects", "readwrite");
+  const done = transactionResult(transaction);
+  try {
+    const store = transaction.objectStore("projects");
+    const project = (await requestResult<ProjectRecord | undefined>(store.get(projectId))) ?? null;
+    if (project) {
+      store.put({ ...project, updatedAt: currentTimestamp() });
+    }
+    await done;
+  } finally {
+    database.close();
+  }
+}
+
+export async function duplicatePointWithAttachments(
+  sourcePoint: PointRecord,
+  nextSortOrder: number,
+): Promise<PointRecord> {
+  const now = currentTimestamp();
+  const duplicatedPoint: PointRecord = {
+    ...sourcePoint,
+    id: createId(),
+    sortOrder: nextSortOrder,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+  };
+
+  const database = await openDatabase();
+  const transaction = database.transaction(["points", "attachments"], "readwrite");
+  const done = transactionResult(transaction);
+  try {
+    const attachmentStore = transaction.objectStore("attachments");
+    const allAttachments = await requestResult<StoredAttachment[]>(attachmentStore.getAll());
+    const pointAttachments = allAttachments.filter(
+      (attachment) =>
+        attachment.deletedAt === null &&
+        attachment.ownerType === "point" &&
+        attachment.ownerId === sourcePoint.id,
+    );
+
+    transaction.objectStore("points").put(duplicatedPoint);
+    for (const attachment of pointAttachments) {
+      attachmentStore.put({
+        ...attachment,
+        id: createId(),
+        ownerId: duplicatedPoint.id,
+        createdAt: now,
+        deletedAt: null,
+      } satisfies StoredAttachment);
+    }
+    await done;
+    return duplicatedPoint;
   } finally {
     database.close();
   }
@@ -248,6 +330,77 @@ export async function restoreDeleted(type: TrashType, id: string): Promise<void>
   }
 }
 
+export async function restoreWithAncestors(type: TrashType, id: string): Promise<void> {
+  const snapshot = await loadSnapshot();
+  const projectIdsToRestore = new Set<string>();
+  const featureIdsToRestore = new Set<string>();
+  const pointIdsToRestore = new Set<string>();
+  const attachmentIdsToRestore = new Set<string>();
+
+  if (type === "project") {
+    projectIdsToRestore.add(id);
+  } else if (type === "feature") {
+    featureIdsToRestore.add(id);
+    const feature = snapshot.features.find((item) => item.id === id);
+    if (feature) projectIdsToRestore.add(feature.projectId);
+  } else if (type === "point") {
+    pointIdsToRestore.add(id);
+    const point = snapshot.points.find((item) => item.id === id);
+    const feature = point ? snapshot.features.find((item) => item.id === point.featureId) : undefined;
+    if (feature) {
+      featureIdsToRestore.add(feature.id);
+      projectIdsToRestore.add(feature.projectId);
+    }
+  } else if (type === "attachment") {
+    attachmentIdsToRestore.add(id);
+    const attachment = snapshot.attachments.find((item) => item.id === id);
+    if (attachment?.ownerType === "project") {
+      projectIdsToRestore.add(attachment.ownerId);
+    } else if (attachment?.ownerType === "feature") {
+      featureIdsToRestore.add(attachment.ownerId);
+      const feature = snapshot.features.find((item) => item.id === attachment.ownerId);
+      if (feature) projectIdsToRestore.add(feature.projectId);
+    } else if (attachment?.ownerType === "point") {
+      pointIdsToRestore.add(attachment.ownerId);
+      const point = snapshot.points.find((item) => item.id === attachment.ownerId);
+      const feature = point ? snapshot.features.find((item) => item.id === point.featureId) : undefined;
+      if (feature) {
+        featureIdsToRestore.add(feature.id);
+        projectIdsToRestore.add(feature.projectId);
+      }
+    }
+  }
+
+  const database = await openDatabase();
+  const transaction = database.transaction(["projects", "features", "points", "attachments"], "readwrite");
+  const done = transactionResult(transaction);
+  try {
+    for (const projectId of projectIdsToRestore) {
+      const store = transaction.objectStore("projects");
+      const record = await requestResult<ProjectRecord | undefined>(store.get(projectId));
+      if (record && record.deletedAt !== null) store.put({ ...record, deletedAt: null });
+    }
+    for (const featureId of featureIdsToRestore) {
+      const store = transaction.objectStore("features");
+      const record = await requestResult<FeatureRecord | undefined>(store.get(featureId));
+      if (record && record.deletedAt !== null) store.put({ ...record, deletedAt: null });
+    }
+    for (const pointId of pointIdsToRestore) {
+      const store = transaction.objectStore("points");
+      const record = await requestResult<PointRecord | undefined>(store.get(pointId));
+      if (record && record.deletedAt !== null) store.put({ ...record, deletedAt: null });
+    }
+    for (const attachmentId of attachmentIdsToRestore) {
+      const store = transaction.objectStore("attachments");
+      const record = await requestResult<StoredAttachment | undefined>(store.get(attachmentId));
+      if (record && record.deletedAt !== null) store.put({ ...record, deletedAt: null });
+    }
+    await done;
+  } finally {
+    database.close();
+  }
+}
+
 export async function purgeDeleted(type: TrashType, id: string): Promise<void> {
   if (type === "attachment") {
     await deleteFromStore("attachments", id);
@@ -277,6 +430,44 @@ export async function purgeDeleted(type: TrashType, id: string): Promise<void> {
     for (const featureId of featureIds) transaction.objectStore("features").delete(featureId);
     for (const pointId of pointIds) transaction.objectStore("points").delete(pointId);
     for (const attachmentId of attachmentIds) transaction.objectStore("attachments").delete(attachmentId);
+    await done;
+  } finally {
+    database.close();
+  }
+}
+
+export async function purgeAllTrash(): Promise<void> {
+  const snapshot = await loadSnapshot();
+  const trashedProjectIds = new Set(
+    snapshot.projects.filter((project) => project.deletedAt !== null).map((project) => project.id),
+  );
+  const trashedFeatureIds = new Set(
+    snapshot.features
+      .filter((feature) => feature.deletedAt !== null || trashedProjectIds.has(feature.projectId))
+      .map((feature) => feature.id),
+  );
+  const trashedPointIds = new Set(
+    snapshot.points
+      .filter((point) => point.deletedAt !== null || trashedFeatureIds.has(point.featureId))
+      .map((point) => point.id),
+  );
+  const trashedAttachmentIds = snapshot.attachments
+    .filter((attachment) => {
+      if (attachment.deletedAt !== null) return true;
+      if (attachment.ownerType === "project" && trashedProjectIds.has(attachment.ownerId)) return true;
+      if (attachment.ownerType === "feature" && trashedFeatureIds.has(attachment.ownerId)) return true;
+      return attachment.ownerType === "point" && trashedPointIds.has(attachment.ownerId);
+    })
+    .map((attachment) => attachment.id);
+
+  const database = await openDatabase();
+  const transaction = database.transaction(["projects", "features", "points", "attachments"], "readwrite");
+  const done = transactionResult(transaction);
+  try {
+    for (const id of trashedProjectIds) transaction.objectStore("projects").delete(id);
+    for (const id of trashedFeatureIds) transaction.objectStore("features").delete(id);
+    for (const id of trashedPointIds) transaction.objectStore("points").delete(id);
+    for (const id of trashedAttachmentIds) transaction.objectStore("attachments").delete(id);
     await done;
   } finally {
     database.close();

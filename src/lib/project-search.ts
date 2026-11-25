@@ -24,6 +24,7 @@ export interface SearchResult {
   text: string;
   date: string;
   source?: PointSource;
+  statedBy?: string;
 }
 
 function tokenize(value: string): string[] {
@@ -34,6 +35,12 @@ function matchesQuery(values: string[], queryTokens: string[]): boolean {
   if (queryTokens.length === 0) return false;
   const words = values.flatMap(tokenize);
   return queryTokens.every((queryToken) => words.some((word) => word.startsWith(queryToken)));
+}
+
+function matchesAnyToken(values: string[], queryTokens: string[]): boolean {
+  if (queryTokens.length === 0) return false;
+  const words = values.flatMap(tokenize);
+  return queryTokens.some((queryToken) => words.some((word) => word.startsWith(queryToken)));
 }
 
 export function searchDocumentation(
@@ -54,7 +61,7 @@ export function searchDocumentation(
 
   for (const project of activeProjects) {
     if (filters.projectId && filters.projectId !== project.id) continue;
-    if (filters.featureId || filters.source && filters.source !== "all" || filters.dateFrom || filters.dateTo) continue;
+    if (filters.featureId || (filters.source && filters.source !== "all") || filters.dateFrom || filters.dateTo) continue;
     const searchable = [project.name, project.customerName, project.description, project.processFlow];
     if (matchesQuery(searchable, queryTokens)) {
       results.push({
@@ -63,7 +70,7 @@ export function searchDocumentation(
         projectId: project.id,
         projectName: project.name,
         targetId: `project-${project.id}`,
-        text: searchable.find((value) => matchesQuery([value], queryTokens)) ?? project.name,
+        text: searchable.find((value) => matchesAnyToken([value], queryTokens)) ?? project.name,
         date: project.updatedAt,
       });
     }
@@ -71,11 +78,12 @@ export function searchDocumentation(
 
   for (const feature of activeFeatures) {
     const project = projectById.get(feature.projectId);
-    if (!project || filters.projectId && filters.projectId !== project.id) continue;
+    if (!project || (filters.projectId && filters.projectId !== project.id)) continue;
     if (filters.featureId && filters.featureId !== feature.id) continue;
-    if (filters.source && filters.source !== "all" || filters.dateFrom || filters.dateTo) continue;
-    const searchable = [feature.name, feature.flowNotes];
-    if (matchesQuery(searchable, queryTokens)) {
+    if ((filters.source && filters.source !== "all") || filters.dateFrom || filters.dateTo) continue;
+    const featureFields = [feature.name, feature.flowNotes];
+    const projectFields = [project.name, project.customerName, project.description, project.processFlow];
+    if (matchesAnyToken(featureFields, queryTokens) && matchesQuery([...featureFields, ...projectFields], queryTokens)) {
       results.push({
         id: feature.id,
         kind: "feature",
@@ -84,7 +92,7 @@ export function searchDocumentation(
         featureId: feature.id,
         featureName: feature.name,
         targetId: `feature-${feature.id}`,
-        text: searchable.find((value) => matchesQuery([value], queryTokens)) ?? feature.name,
+        text: featureFields.find((value) => matchesAnyToken([value], queryTokens)) ?? feature.name,
         date: feature.updatedAt,
       });
     }
@@ -100,7 +108,17 @@ export function searchDocumentation(
     if (filters.source && filters.source !== "all" && filters.source !== point.source) continue;
     if (filters.dateFrom && point.mentionedOn < filters.dateFrom) continue;
     if (filters.dateTo && point.mentionedOn > filters.dateTo) continue;
-    if (!matchesQuery([point.content], queryTokens)) continue;
+    const pointFields = [point.content, point.statedBy];
+    const contextFields = [
+      project.name,
+      project.customerName,
+      project.description,
+      project.processFlow,
+      feature.name,
+      feature.flowNotes,
+    ];
+    if (!matchesAnyToken(pointFields, queryTokens)) continue;
+    if (!matchesQuery([...pointFields, ...contextFields], queryTokens)) continue;
     results.push({
       id: point.id,
       kind: "point",
@@ -112,6 +130,7 @@ export function searchDocumentation(
       text: point.content,
       date: point.mentionedOn,
       source: point.source,
+      ...(point.statedBy ? { statedBy: point.statedBy } : {}),
     });
   }
 

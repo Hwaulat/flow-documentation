@@ -1,14 +1,18 @@
-# Welcome to your Lovable project
+# Flow Documentation
+
+buatkan saya sistem berdasarkan brief .MD yang saya berikan, untuk kebutuhan web based sistem, untuk styelnya bisa kami pakai referensi design berikut ini https://uiarc.dev/components/
+
+tidak perlu ada login aplikasi, jadi langsung masuk ke halaman utama dan juga untuk database disimpan di local saja
 
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/f44b2263-7c1a-4dc7-b711-5a7b134ce5a3).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +24,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS

@@ -2,28 +2,47 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const SUPABASE_STORAGE_BUCKET = "flowdoc-attachments";
 
-function readEnv(key: string): string {
-  const metaEnv = import.meta.env as Record<string, unknown> | undefined;
-  const fromImportMeta = metaEnv?.[key];
-  if (typeof fromImportMeta === "string" && fromImportMeta.trim()) {
-    return fromImportMeta.trim();
-  }
-  if (typeof process !== "undefined" && process.env) {
-    const fromProcess = process.env[key];
-    if (typeof fromProcess === "string" && fromProcess.trim()) {
-      return fromProcess.trim();
-    }
+function cleanEnvValue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/^(['"])(.*)\1$/, "$2").trim();
+}
+
+function firstEnvValue(...candidates: Array<unknown>): string {
+  for (const candidate of candidates) {
+    const cleaned = cleanEnvValue(candidate);
+    if (cleaned) return cleaned;
   }
   return "";
 }
 
 export function getSupabaseConfig(): { url: string; key: string } {
-  const url = readEnv("VITE_SUPABASE_URL") || readEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const key =
-    readEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ||
-    readEnv("VITE_SUPABASE_ANON_KEY") ||
-    readEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") ||
-    readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const procEnv = typeof process !== "undefined" && process.env ? process.env : undefined;
+
+  // Use direct static import.meta.env.* property accesses so Vite replaces them at build time.
+  const url = firstEnvValue(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.NEXT_PUBLIC_SUPABASE_URL,
+    import.meta.env.SUPABASE_URL,
+    procEnv?.["VITE_SUPABASE_URL"],
+    procEnv?.["NEXT_PUBLIC_SUPABASE_URL"],
+    procEnv?.["SUPABASE_URL"],
+  );
+
+  const key = firstEnvValue(
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    import.meta.env.VITE_SUPABASE_ANON_KEY,
+    import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    import.meta.env.SUPABASE_PUBLISHABLE_KEY,
+    import.meta.env.SUPABASE_ANON_KEY,
+    procEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"],
+    procEnv?.["VITE_SUPABASE_ANON_KEY"],
+    procEnv?.["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"],
+    procEnv?.["NEXT_PUBLIC_SUPABASE_ANON_KEY"],
+    procEnv?.["SUPABASE_PUBLISHABLE_KEY"],
+    procEnv?.["SUPABASE_ANON_KEY"],
+  );
+
   return { url, key };
 }
 
@@ -39,7 +58,7 @@ export function getSupabaseClient(): SupabaseClient {
   const { url, key } = getSupabaseConfig();
   if (!url || !key) {
     throw new Error(
-      "Konfigurasi Supabase (VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY) belum diatur.",
+      "Konfigurasi Supabase (VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY) belum diatur. Tambahkan di Environment Variables Vercel lalu Redeploy.",
     );
   }
   const signature = `${url}|${key}`;

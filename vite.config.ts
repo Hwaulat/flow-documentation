@@ -10,19 +10,48 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { loadEnv } from "vite";
 
-const loaded = loadEnv(process.env["NODE_ENV"] ?? "development", process.cwd(), "");
-const fallbackSupabaseUrl =
-  process.env["VITE_SUPABASE_URL"] ||
-  process.env["NEXT_PUBLIC_SUPABASE_URL"] ||
-  loaded["VITE_SUPABASE_URL"] ||
-  loaded["NEXT_PUBLIC_SUPABASE_URL"] ||
-  "";
-const fallbackSupabaseKey =
-  process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
-  process.env["VITE_SUPABASE_ANON_KEY"] ||
-  process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ||
-  process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] ||
-  "";
+function cleanEnvValue(value: string | undefined): string {
+  if (!value) return "";
+  return value.trim().replace(/^(['"])(.*)\1$/, "$2").trim();
+}
+
+function readFirstEnv(
+  names: readonly string[],
+  sources: readonly Record<string, string | undefined>[],
+): string {
+  for (const name of names) {
+    for (const source of sources) {
+      const cleaned = cleanEnvValue(source[name]);
+      if (cleaned) return cleaned;
+    }
+  }
+  return "";
+}
+
+const cliModeIndex = process.argv.findIndex((arg) => arg === "--mode" || arg === "-m");
+const cliMode = cliModeIndex >= 0 ? process.argv[cliModeIndex + 1] : undefined;
+const activeMode = cliMode ?? process.env["NODE_ENV"] ?? "development";
+
+const modeEnv = loadEnv(activeMode, process.cwd(), "");
+const prodEnv = loadEnv("production", process.cwd(), "");
+const devEnv = loadEnv("development", process.cwd(), "");
+const envSources = [process.env, modeEnv, prodEnv, devEnv] as const;
+
+const fallbackSupabaseUrl = readFirstEnv(
+  ["VITE_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"],
+  envSources,
+);
+const fallbackSupabaseKey = readFirstEnv(
+  [
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_ANON_KEY",
+  ],
+  envSources,
+);
 
 export default defineConfig({
   tanstackStart: {
@@ -32,14 +61,15 @@ export default defineConfig({
   },
   vite: {
     define: {
-      ...(fallbackSupabaseUrl
-        ? { "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(fallbackSupabaseUrl) }
-        : {}),
-      ...(fallbackSupabaseKey
-        ? {
-            "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(fallbackSupabaseKey),
-          }
-        : {}),
+      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(fallbackSupabaseUrl),
+      "import.meta.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(fallbackSupabaseUrl),
+      "import.meta.env.SUPABASE_URL": JSON.stringify(fallbackSupabaseUrl),
+      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(fallbackSupabaseKey),
+      "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(fallbackSupabaseKey),
+      "import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(fallbackSupabaseKey),
+      "import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": JSON.stringify(fallbackSupabaseKey),
+      "import.meta.env.SUPABASE_PUBLISHABLE_KEY": JSON.stringify(fallbackSupabaseKey),
+      "import.meta.env.SUPABASE_ANON_KEY": JSON.stringify(fallbackSupabaseKey),
     },
   },
 });

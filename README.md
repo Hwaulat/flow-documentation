@@ -2,11 +2,12 @@
 
 Aplikasi dokumentasi alur proses proyek, daftar fitur, dan poin kebutuhan pelanggan berbasis web dalam bahasa Indonesia dengan gaya UIARC yang bersih, fokus pada keterbacaan, dan bergerak halus (`prefers-reduced-motion` didukung penuh).
 
-## Prinsip Tanpa Login & Batas Penyimpanan Lokal
+## Prinsip Tanpa Login & Penyimpanan Supabase
 
-- **Langsung ke halaman utama (tanpa login):** Tidak ada autentikasi, akun pengguna, cloud sync, ataupun ketergantungan jaringan saat aplikasi dijalankan. Membuka aplikasi langsung masuk ke **Dasbor Proyek** (`/`).
-- **Penyimpanan lokal di IndexedDB (`project-flow-local`):** Seluruh data proyek, fitur, catatan alur, poin pelanggan, dan lampiran gambar (PNG/JPEG/GIF/WebP maks. 10 MB per file) disimpan secara lokal di peramban dan perangkat ini saja (*bukan* file SQLite terpisah di luar peramban).
-- **Portabilitas & pencadangan mandiri:** Karena data berada pada profil peramban saat ini (dan dapat terhapus apabila cache/data situs dibersihkan), gunakan menu **Cadangan & Ekspor** (`/backup`) untuk mengunduh arsip lengkap `.zip` (termasuk semua file gambar), ekspor `.json`, ekspor Markdown `.zip` per proyek, atau cetak/simpan ke PDF, serta memulihkan data dari arsip cadangan.
+- **Langsung ke halaman utama (tanpa login):** Tidak ada halaman login; membuka aplikasi langsung masuk ke **Dasbor Proyek** (`/`).
+- **Database Supabase (Postgres + Storage):** Seluruh proyek, fitur, catatan alur, poin pelanggan, status cadangan, dan metadata lampiran disimpan di tabel Supabase Postgres (`projects`, `features`, `points`, `attachments`, `app_settings`), sedangkan file gambar (PNG/JPEG/GIF/WebP maks. 10 MB per file) disimpan di bucket Storage `flowdoc-attachments`.
+- **Variabel Lingkungan (`.env.local` & Vercel):** Atur `VITE_SUPABASE_URL` dan `VITE_SUPABASE_PUBLISHABLE_KEY` (mendukung juga `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` melalui konfigurasi [vite.config.ts](file:///c:/Users/waula/OneDrive/Dokumen/flow-documentation/vite.config.ts)).
+- **Portabilitas & pencadangan:** Gunakan menu **Cadangan & Ekspor** (`/backup`) kapan saja untuk mengunduh arsip lengkap `.zip` (termasuk semua gambar), ekspor `.json`, ekspor Markdown `.zip` per proyek, cetak/simpan PDF, atau memulihkan data dari arsip cadangan.
 
 ## Fitur Utama
 
@@ -15,7 +16,7 @@ Aplikasi dokumentasi alur proses proyek, daftar fitur, dan poin kebutuhan pelang
 - **Detail Fitur & Tabel Poin Pelanggan (`/projects/:projectId/features/:featureId`):** Catatan alur fitur, lampiran gambar fitur, serta seluruh poin kebutuhan pelanggan dalam tampilan **tabel data** lengkap dengan pencarian/filter tabel, tambah cepat (`Enter` untuk simpan), edit, ubah urutan naik/turun, duplikasi (beserta lampiran gambarnya), pindahkan ke fitur lain, metadata opsional (*tanggal disebutkan*, *sumber*, *disampaikan oleh*), dan lampiran gambar per poin.
 - **Pencarian Global (`/` atau `Ctrl/Cmd + K`):** Pencarian lintas proyek, alur proses, fitur, dan poin pelanggan dengan pencocokan AND berbasis awalan kata (*case-insensitive*), filter proyek/fitur/sumber/tanggal, dan navigasi langsung ke elemen tujuan dengan sorotan visual.
 - **Penghapusan Aman & Sampah (`/trash`):** Toast **Urungkan** (*Undo*) langsung saat menghapus, halaman Sampah untuk proyek/fitur/poin/gambar, pemulihan otomatis beserta item induknya bila ikut terhapus, serta penghapusan permanen dengan konfirmasi.
-- **Cadangan, Ekspor & Penyimpanan (`/backup`):** Pantau kuota dan mode penyimpanan persisten peramban, status cadangan terakhir, unduh/pulihkan arsip `.zip` & `.json`, ekspor Markdown `.zip` dan PDF per proyek, serta opsi reset penyimpanan lokal.
+- **Cadangan, Ekspor & Penyimpanan (`/backup`):** Pantau status koneksi Supabase & cadangan terakhir, unduh/pulihkan arsip `.zip` & `.json`, ekspor Markdown `.zip` dan PDF per proyek, serta opsi reset database.
 
 ## Pengembangan Lokal
 

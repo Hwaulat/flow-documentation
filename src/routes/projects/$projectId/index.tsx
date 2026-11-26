@@ -225,7 +225,7 @@ function ProjectWorkspacePage() {
       <div className="arc-surface mx-auto max-w-lg rounded-2xl p-8 text-center">
         <h1 className="text-xl font-bold">Proyek tidak ditemukan</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Proyek ini mungkin sudah dihapus permanen atau berada di perangkat peramban lain.
+          Proyek ini mungkin sudah dihapus permanen atau belum tersedia di database Supabase.
         </p>
         <Button asChild className="mt-6 rounded-xl">
           <Link to="/">Kembali ke Dasbor</Link>

@@ -23,6 +23,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   saveAttachment,
   touchProject,
+  updateAttachmentCaption,
   type AttachmentOwnerType,
   type AttachmentRecord,
 } from "@/lib/local-db";
@@ -198,13 +199,8 @@ export function AttachmentGallery({
     if (!lightboxAttachment) return;
     setSavingCaption(true);
     try {
-      const stored = await getAttachment(lightboxAttachment.id);
-      if (!stored) {
-        toast.error("Lampiran tidak lagi tersedia.");
-        return;
-      }
       const nextCaption = captionDraft.trim();
-      await saveAttachment({ ...stored, caption: nextCaption });
+      await updateAttachmentCaption(lightboxAttachment.id, nextCaption);
       await touchProject(projectId);
       await reload();
       setLightboxAttachment({ ...lightboxAttachment, caption: nextCaption });

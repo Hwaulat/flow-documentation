@@ -179,12 +179,12 @@ function DashboardPage() {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             <HardDrive className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-            Offline-First · Disimpan Lokal di Peramban
+            Tersimpan di Supabase · Tanpa Login
           </div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dasbor Proyek</h1>
           <p className="text-sm text-muted-foreground">
-            Catat alur proses, susun daftar fitur, dan kumpulkan poin kebutuhan pelanggan di satu
-            tempat tanpa login.
+            Catat alur proses, susun daftar fitur, dan kumpulkan poin kebutuhan pelanggan yang
+            tersinkronisasi langsung ke database Supabase.
           </p>
         </div>
 
@@ -325,8 +325,8 @@ function DashboardPage() {
           </div>
           <h2 className="mt-4 text-lg font-semibold">Belum ada proyek dokumentasi</h2>
           <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
-            Mulai dokumentasikan alur proses proyek, kerangka fitur, lampiran gambar, dan poin
-            masukan pelanggan langsung di peramban ini tanpa login.
+            Mulai dokumentasikan alur proses proyek, daftar fitur, lampiran gambar, dan poin
+            masukan pelanggan yang langsung tersimpan di Supabase tanpa login.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
             <Button

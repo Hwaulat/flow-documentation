@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
-import { loadSnapshot, removeLegacyDummyData, type DatabaseSnapshot } from "@/lib/local-db";
+import { loadSnapshot, type DatabaseSnapshot } from "@/lib/local-db";
 
 const EMPTY_SNAPSHOT: DatabaseSnapshot = {
   projects: [],
@@ -33,17 +33,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    if (typeof navigator !== "undefined" && navigator.storage?.persist) {
-      void navigator.storage.persist().catch(() => {
-        // Ignore storage persistence denial
-      });
-    }
-
-    void removeLegacyDummyData()
-      .catch(() => {
-        // Ignore cleanup failure and proceed to load snapshot
-      })
-      .then(() => loadSnapshot())
+    void loadSnapshot()
       .then((nextSnapshot) => {
         if (active) {
           setSnapshot(nextSnapshot);
@@ -52,12 +42,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       })
       .catch((error: unknown) => {
         if (active) {
-          setStorageError(error instanceof Error ? error.message : "Penyimpanan lokal tidak dapat dibuka.");
+          setStorageError(
+            error instanceof Error ? error.message : "Database Supabase tidak dapat dibuka.",
+          );
         }
       })
       .finally(() => {
         if (active) setReady(true);
       });
+
     return () => {
       active = false;
     };

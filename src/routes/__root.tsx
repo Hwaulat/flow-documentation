@@ -87,13 +87,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Aplikasi dokumentasi alur proses proyek dan poin kebutuhan pelanggan berbasis lokal tanpa login.",
+          "Aplikasi dokumentasi alur proses proyek dan poin kebutuhan pelanggan berbasis Supabase tanpa login.",
       },
       { property: "og:title", content: "FlowDoc — Dokumentasi Alur & Kebutuhan Proyek" },
       {
         property: "og:description",
         content:
-          "Aplikasi dokumentasi alur proses proyek dan poin kebutuhan pelanggan berbasis lokal tanpa login.",
+          "Aplikasi dokumentasi alur proses proyek dan poin kebutuhan pelanggan berbasis Supabase tanpa login.",
       },
       { property: "og:type", content: "website" },
     ],

@@ -159,10 +159,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="mt-6 rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2 font-medium text-foreground">
                     <HardDrive className="h-3.5 w-3.5" />
-                    Penyimpanan Lokal Saja
+                    Database Supabase · Tanpa Login
                   </div>
                   <p className="mt-1">
-                    Data disimpan di peramban ini (IndexedDB) tanpa akun atau login.
+                    Seluruh proyek, fitur, poin pelanggan, dan lampiran tersimpan di Supabase.
                   </p>
                 </div>
               </SheetContent>
@@ -226,11 +226,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
 
             <div
-              title="Data tersimpan secara lokal di peramban ini tanpa login"
+              title={
+                storageError
+                  ? "Koneksi Supabase membutuhkan perhatian"
+                  : "Terhubung ke database Supabase tanpa login"
+              }
               className="hidden items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground lg:inline-flex"
             >
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Lokal · Tanpa Login
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  storageError ? "bg-amber-500" : "bg-emerald-500",
+                )}
+              />
+              Supabase · Tanpa Login
             </div>
           </div>
         </div>

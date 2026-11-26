@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Archive,
   CheckCircle2,
+  Database,
   Download,
   FileArchive,
   FileJson,
-  HardDrive,
   Printer,
   ShieldCheck,
   Trash2,
@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { useAppData } from "@/lib/app-data";
 import {
   backupFileName,
@@ -45,6 +44,7 @@ import {
   saveLastBackupAt,
   type ProjectRecord,
 } from "@/lib/local-db";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/backup")({
@@ -54,49 +54,15 @@ export const Route = createFileRoute("/backup")({
   component: BackupPage,
 });
 
-interface StorageQuotaState {
-  usage: number | null;
-  quota: number | null;
-  persisted: boolean | null;
-}
-
 function BackupPage() {
-  const { snapshot, reload } = useAppData();
+  const { snapshot, storageError, reload } = useAppData();
   const restoreInputRef = useRef<HTMLInputElement>(null);
 
-  const [quotaInfo, setQuotaInfo] = useState<StorageQuotaState>({
-    usage: null,
-    quota: null,
-    persisted: null,
-  });
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
-      void Promise.all([
-        navigator.storage.estimate(),
-        navigator.storage.persisted ? navigator.storage.persisted() : Promise.resolve(null),
-      ])
-        .then(([estimate, persisted]) => {
-          if (active) {
-            setQuotaInfo({
-              usage: typeof estimate.usage === "number" ? estimate.usage : null,
-              quota: typeof estimate.quota === "number" ? estimate.quota : null,
-              persisted,
-            });
-          }
-        })
-        .catch(() => {
-          // Ignore browsers blocking storage estimate
-        });
-    }
-    return () => {
-      active = false;
-    };
-  }, [snapshot]);
+  const supabaseReady = isSupabaseConfigured() && !storageError;
 
   const stats = useMemo(() => {
     const activeProjects = snapshot.projects.filter((item) => item.deletedAt === null);
@@ -203,9 +169,9 @@ function BackupPage() {
       await clearAllLocalData();
       await reload();
       setConfirmClearAll(false);
-      toast.success("Seluruh data lokal berhasil dihapus");
+      toast.success("Seluruh data di Supabase berhasil dihapus");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal menghapus data lokal.");
+      toast.error(error instanceof Error ? error.message : "Gagal menghapus data Supabase.");
     } finally {
       setBusyAction(null);
     }
@@ -224,18 +190,13 @@ function BackupPage() {
     }
   }
 
-  const quotaPercent =
-    quotaInfo.usage !== null && quotaInfo.quota !== null && quotaInfo.quota > 0
-      ? Math.min(100, Math.max(1, Math.round((quotaInfo.usage / quotaInfo.quota) * 100)))
-      : null;
-
   return (
     <div className="space-y-6">
       <section className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Cadangan &amp; Ekspor Data</h1>
         <p className="text-sm text-muted-foreground">
-          Kelola arsip cadangan lengkap, pemulihan data, ekspor Markdown/PDF per proyek, serta
-          pantau penggunaan penyimpanan lokal peramban.
+          Kelola arsip cadangan lengkap, pemulihan data ke Supabase, ekspor Markdown/PDF per
+          proyek, serta pantau ukuran data yang tersimpan.
         </p>
       </section>
 
@@ -288,39 +249,38 @@ function BackupPage() {
         </div>
 
         <div className="arc-surface space-y-4 rounded-2xl p-5">
-          <div className="flex items-center gap-2">
-            <HardDrive className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">Batas &amp; Penggunaan Penyimpanan Lokal</h2>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-primary" />
+              <h2 className="text-base font-semibold">Penyimpanan Database Supabase</h2>
+            </div>
+            <Badge
+              variant="outline"
+              className={cn(
+                supabaseReady
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+              )}
+            >
+              {supabaseReady ? "Terhubung" : "Perlu Setup SQL"}
+            </Badge>
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Seluruh catatan dan gambar disimpan langsung di <strong>IndexedDB</strong> pada profil
-            peramban dan perangkat ini saja (bukan file SQLite terpisah dan tanpa server/login).
-            Menghapus data situs peramban akan menghapus isi workspace jika belum dicadangkan.
+            Seluruh proyek, fitur, dan poin pelanggan disimpan di tabel{" "}
+            <strong>Supabase Postgres</strong>, sedangkan file gambar disimpan di bucket{" "}
+            <strong>Supabase Storage</strong> (<code>flowdoc-attachments</code>), sehingga data
+            sinkron antara lokal dan Vercel tanpa login.
           </p>
 
           <div className="space-y-2 rounded-xl border bg-muted/35 p-3.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-foreground">Perkiraan ukuran data dokumentasi</span>
+              <span className="font-medium text-foreground">Perkiraan total data &amp; gambar</span>
               <span className="font-semibold">{formatBytes(stats.totalDataBytes)}</span>
             </div>
-
-            {quotaInfo.usage !== null && quotaInfo.quota !== null && (
-              <>
-                <Progress value={quotaPercent ?? 1} className="h-2" />
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>Terpakai di origin ini: {formatBytes(quotaInfo.usage)}</span>
-                  <span>Kuota peramban: {formatBytes(quotaInfo.quota)}</span>
-                </div>
-                {quotaInfo.persisted !== null && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Mode penyimpanan persisten:{" "}
-                    <strong className="text-foreground">
-                      {quotaInfo.persisted ? "Aktif (tidak otomatis dihapus browser)" : "Standar"}
-                    </strong>
-                  </p>
-                )}
-              </>
-            )}
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>File gambar di Storage: {formatBytes(stats.attachmentBytes)}</span>
+              <span>Rekor teks: {formatBytes(stats.totalDataBytes - stats.attachmentBytes)}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -496,10 +456,10 @@ function BackupPage() {
 
       <section className="arc-surface flex flex-col justify-between gap-4 rounded-2xl border-destructive/25 p-5 sm:flex-row sm:items-center">
         <div className="space-y-1">
-          <h2 className="text-base font-semibold text-destructive">Reset Penyimpanan Lokal</h2>
+          <h2 className="text-base font-semibold text-destructive">Reset Database Supabase</h2>
           <p className="text-xs text-muted-foreground">
-            Menghapus seluruh proyek, fitur, poin pelanggan, isi Sampah, dan lampiran gambar di
-            peramban ini secara permanen untuk memulai dari kondisi kosong.
+            Menghapus seluruh proyek, fitur, poin pelanggan, isi Sampah, dan lampiran gambar dari
+            database Supabase secara permanen untuk memulai dari kondisi kosong.
           </p>
         </div>
         <Button
@@ -510,7 +470,7 @@ function BackupPage() {
           className="shrink-0 gap-1.5 rounded-xl"
         >
           <Trash2 className="h-4 w-4" />
-          Hapus Semua Data Lokal
+          Hapus Semua Data
         </Button>
       </section>
 
@@ -550,12 +510,12 @@ function BackupPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              Hapus Semua Data Lokal?
+              Hapus Semua Data di Supabase?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Seluruh proyek, fitur, poin pelanggan, isi Sampah, dan lampiran gambar yang tersimpan
-              di peramban ini akan dihapus permanen. Pastikan Anda sudah mengunduh cadangan jika
-              masih diperlukan.
+              Seluruh proyek, fitur, poin pelanggan, isi Sampah, dan lampiran gambar di database
+              Supabase akan dihapus permanen. Pastikan Anda sudah mengunduh cadangan jika masih
+              diperlukan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

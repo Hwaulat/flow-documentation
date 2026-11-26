@@ -154,7 +154,7 @@ describe("UI workflows", () => {
     expect(article).toBeInTheDocument();
     expect(article?.getAttribute("style")).toContain("Times New Roman");
     expect(screen.getByText(/Laporan Dokumentasi Kebutuhan Pelanggan/i)).toBeInTheDocument();
-    expect(screen.getByText("PT Maju Bersama")).toBeInTheDocument();
+    expect(screen.getAllByText("PT Maju Bersama").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Pelanggan meminta format invoice PDF")).toBeInTheDocument();
     expect(screen.getByText(/Mengetahui \/ Pelanggan/i)).toBeInTheDocument();
   });

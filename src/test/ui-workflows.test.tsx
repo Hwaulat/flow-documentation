@@ -78,6 +78,7 @@ vi.mock("@/lib/local-db", async () => {
   };
 });
 
+import { CustomerPdfReport } from "@/components/CustomerPdfReport";
 import { GlobalSearchDialog } from "@/components/GlobalSearchDialog";
 import { ProjectFormDialog } from "@/components/ProjectFormDialog";
 
@@ -131,5 +132,30 @@ describe("UI workflows", () => {
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders formal customer PDF report markup with Times New Roman font", () => {
+    const project = sampleSnapshot.projects[0]!;
+    const feature = sampleSnapshot.features[0]!;
+    const point = sampleSnapshot.points[0]!;
+
+    const { container } = render(
+      <CustomerPdfReport
+        mode="project"
+        project={project}
+        features={[feature]}
+        pointsByFeature={new Map([[feature.id, [point]]])}
+        attachmentsByPoint={new Map()}
+        thumbnails={{}}
+      />,
+    );
+
+    const article = container.querySelector("article[data-print-only='true']");
+    expect(article).toBeInTheDocument();
+    expect(article?.getAttribute("style")).toContain("Times New Roman");
+    expect(screen.getByText(/Laporan Dokumentasi Kebutuhan Pelanggan/i)).toBeInTheDocument();
+    expect(screen.getByText("PT Maju Bersama")).toBeInTheDocument();
+    expect(screen.getByText("Pelanggan meminta format invoice PDF")).toBeInTheDocument();
+    expect(screen.getByText(/Mengetahui \/ Pelanggan/i)).toBeInTheDocument();
   });
 });

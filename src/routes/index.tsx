@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
-  Archive,
   ArrowUpRight,
   Download,
   FileText,
@@ -42,7 +41,6 @@ import { createProjectMarkdownArchive, downloadFile, projectExportName } from "@
 import {
   formatBytes,
   formatDateId,
-  formatDateTimeId,
   PROJECT_STATUS_META,
 } from "@/lib/formatters";
 import type { ProjectRecord, ProjectStatus } from "@/lib/local-db";
@@ -125,11 +123,15 @@ function DashboardPage() {
   const summary = useMemo(() => {
     let featureTotal = 0;
     let pointTotal = 0;
+    let attachmentTotal = 0;
     for (const value of projectStats.values()) {
       featureTotal += value.featureCount;
       pointTotal += value.pointCount;
+      attachmentTotal += value.attachmentCount;
     }
-    const attachmentBytes = snapshot.attachments.reduce((sum, item) => sum + item.size, 0);
+    const attachmentBytes = snapshot.attachments
+      .filter((item) => item.deletedAt === null)
+      .reduce((sum, item) => sum + item.size, 0);
     return {
       totalProjects: activeProjects.length,
       activeCount: activeProjects.filter((item) => item.status === "active").length,
@@ -137,6 +139,7 @@ function DashboardPage() {
       doneCount: activeProjects.filter((item) => item.status === "done").length,
       featureTotal,
       pointTotal,
+      attachmentTotal,
       attachmentBytes,
     };
   }, [activeProjects, projectStats, snapshot.attachments]);
@@ -233,21 +236,16 @@ function DashboardPage() {
           <p className="mt-0.5 text-xs text-muted-foreground">Masukan dari meeting &amp; chat</p>
         </div>
 
-        <Link
-          to="/backup"
-          className="arc-surface arc-surface-interactive block rounded-2xl p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <div className="arc-surface rounded-2xl p-4">
           <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-            <span>Status Cadangan</span>
-            <Archive className="h-4 w-4" />
+            <span>Lampiran Gambar</span>
+            <ImageIcon className="h-4 w-4" />
           </div>
-          <p className="mt-2 truncate text-sm font-semibold text-foreground">
-            {snapshot.lastBackupAt ? formatDateTimeId(snapshot.lastBackupAt) : "Belum dicadangkan"}
+          <p className="mt-2 text-2xl font-bold tracking-tight">{summary.attachmentTotal}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {formatBytes(summary.attachmentBytes)} di Supabase Storage
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Lampiran {formatBytes(summary.attachmentBytes)} · Kelola cadangan →
-          </p>
-        </Link>
+        </div>
       </section>
 
       {activeProjects.length > 0 && (
@@ -339,9 +337,6 @@ function DashboardPage() {
             >
               <Plus className="h-4 w-4" />
               Buat Proyek Pertama
-            </Button>
-            <Button type="button" variant="outline" asChild className="rounded-xl">
-              <Link to="/backup">Pulihkan Cadangan</Link>
             </Button>
           </div>
         </section>
@@ -452,9 +447,7 @@ function DashboardPage() {
                   </Link>
 
                   <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
-                    {project.description ||
-                      project.processFlow ||
-                      "Belum ada deskripsi atau catatan alur proses."}
+                    {project.description || "Belum ada deskripsi proyek."}
                   </p>
                 </div>
 

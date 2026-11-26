@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Archive,
   FolderKanban,
   HardDrive,
   Menu,
@@ -83,13 +82,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       icon: Trash2,
       active: pathname === "/trash",
       badge: trashCount > 0 ? trashCount : null,
-    },
-    {
-      to: "/backup" as const,
-      label: "Cadangan & Ekspor",
-      icon: Archive,
-      active: pathname === "/backup",
-      badge: null as number | null,
     },
   ];
 

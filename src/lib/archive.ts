@@ -151,10 +151,8 @@ export async function createProjectMarkdownArchive(projectId: string): Promise<B
     `**Status:** ${project.status}`,
     `**Diperbarui:** ${new Date(project.updatedAt).toLocaleString("id-ID")}`,
     "",
-    "## Alur proses",
-    "",
-    project.processFlow || "Belum ada catatan alur proses.",
-    "",
+    ...(project.description ? ["## Deskripsi", "", project.description, ""] : []),
+    ...(project.processFlow ? ["## Alur proses", "", project.processFlow, ""] : []),
   ];
 
   const projectAttachments = snapshot.attachments.filter(
@@ -170,7 +168,7 @@ export async function createProjectMarkdownArchive(projectId: string): Promise<B
   }
 
   for (const feature of features) {
-    markdown.push(`## ${feature.name}`, "", feature.flowNotes || "", "");
+    markdown.push(`## ${feature.name}`, "", ...(feature.flowNotes ? [feature.flowNotes, ""] : []));
     const featureAttachments = snapshot.attachments.filter(
       (attachment) => attachment.deletedAt === null && attachment.ownerType === "feature" && attachment.ownerId === feature.id,
     );

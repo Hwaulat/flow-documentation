@@ -16,11 +16,10 @@ import {
   Printer,
   RotateCcw,
   Trash2,
-  Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { AttachmentGallery } from "@/components/AttachmentGallery";
+import { CustomerPdfReport } from "@/components/CustomerPdfReport";
 import { ProjectFormDialog } from "@/components/ProjectFormDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,23 +41,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { useAppData } from "@/lib/app-data";
 import { createProjectMarkdownArchive, downloadFile, projectExportName } from "@/lib/archive";
 import {
   formatDateId,
   formatDateTimeId,
-  POINT_SOURCE_META,
   PROJECT_STATUS_META,
 } from "@/lib/formatters";
 import {
   createId,
   currentTimestamp,
+  getAttachment,
   restoreDeleted,
   saveFeature,
   saveFeatures,
-  saveProject,
   touchProject,
+  type AttachmentRecord,
   type FeatureRecord,
   type PointRecord,
 } from "@/lib/local-db";
@@ -84,16 +82,16 @@ function ProjectWorkspacePage() {
 
   const newFeatureInputRef = useRef<HTMLInputElement>(null);
   const printTriggeredRef = useRef<string | null>(null);
+  const printThumbUrlsRef = useRef<string[]>([]);
 
   const [editProjectOpen, setEditProjectOpen] = useState(false);
-  const [processFlowDraft, setProcessFlowDraft] = useState("");
-  const [savingFlow, setSavingFlow] = useState(false);
   const [newFeatureName, setNewFeatureName] = useState("");
   const [addingFeature, setAddingFeature] = useState(false);
   const [renamingFeature, setRenamingFeature] = useState<FeatureRecord | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [savingRename, setSavingRename] = useState(false);
   const [highlightedTargetId, setHighlightedTargetId] = useState<string | null>(null);
+  const [printThumbnails, setPrintThumbnails] = useState<Record<string, string>>({});
 
   const project = useMemo(
     () => snapshot.projects.find((item) => item.id === projectId),
@@ -122,6 +120,27 @@ function ProjectWorkspacePage() {
     return map;
   }, [projectFeatures, snapshot.points]);
 
+  const pointAttachmentsMap = useMemo(() => {
+    const map = new Map<string, AttachmentRecord[]>();
+    const pointIds = new Set<string>();
+    for (const points of pointsByFeature.values()) {
+      for (const point of points) {
+        pointIds.add(point.id);
+        map.set(point.id, []);
+      }
+    }
+    for (const attachment of snapshot.attachments) {
+      if (
+        attachment.deletedAt === null &&
+        attachment.ownerType === "point" &&
+        pointIds.has(attachment.ownerId)
+      ) {
+        map.get(attachment.ownerId)?.push(attachment);
+      }
+    }
+    return map;
+  }, [pointsByFeature, snapshot.attachments]);
+
   const featureAttachmentCounts = useMemo(() => {
     const counts = new Map<string, number>();
     const pointToFeature = new Map<string, string>();
@@ -141,37 +160,11 @@ function ProjectWorkspacePage() {
     return counts;
   }, [pointsByFeature, snapshot.attachments]);
 
-  const projectProcessFlow = project?.processFlow ?? "";
-  const currentProjectId = project?.id ?? "";
-
   useEffect(() => {
-    if (currentProjectId) {
-      setProcessFlowDraft(projectProcessFlow);
-    }
-  }, [currentProjectId, projectProcessFlow]);
-
-  useEffect(() => {
-    if (!ready || !project || project.deletedAt !== null) return;
-    if (processFlowDraft === project.processFlow) return;
-
-    const timer = window.setTimeout(() => {
-      setSavingFlow(true);
-      void saveProject({
-        ...project,
-        processFlow: processFlowDraft,
-        updatedAt: currentTimestamp(),
-      })
-        .then(() => reload())
-        .catch(() => {
-          // Handled on explicit save/blur if storage fails
-        })
-        .finally(() => {
-          setSavingFlow(false);
-        });
-    }, 600);
-
-    return () => window.clearTimeout(timer);
-  }, [ready, project, processFlowDraft, reload]);
+    return () => {
+      for (const url of printThumbUrlsRef.current) URL.revokeObjectURL(url);
+    };
+  }, []);
 
   useEffect(() => {
     const target = searchParams.target;
@@ -195,18 +188,46 @@ function ProjectWorkspacePage() {
     };
   }, [ready, project, searchParams.target]);
 
-  const handlePrintPdf = useCallback(() => {
-    toast.info("Menyiapkan tampilan cetak / simpan PDF...", { duration: 2500 });
+  const handlePrintPdf = useCallback(async () => {
+    toast.info("Menyiapkan laporan PDF pelanggan...", { duration: 2500 });
+
+    const attachmentsToLoad: AttachmentRecord[] = [];
+    for (const list of pointAttachmentsMap.values()) {
+      attachmentsToLoad.push(...list);
+    }
+
+    if (attachmentsToLoad.length > 0) {
+      const nextThumbs: Record<string, string> = {};
+      const newUrls: string[] = [];
+      await Promise.all(
+        attachmentsToLoad.map(async (att) => {
+          try {
+            const stored = await getAttachment(att.id);
+            if (stored) {
+              const url = URL.createObjectURL(stored.blob);
+              newUrls.push(url);
+              nextThumbs[att.id] = url;
+            }
+          } catch {
+            // Skip unavailable image
+          }
+        }),
+      );
+      for (const oldUrl of printThumbUrlsRef.current) URL.revokeObjectURL(oldUrl);
+      printThumbUrlsRef.current = newUrls;
+      setPrintThumbnails(nextThumbs);
+    }
+
     window.setTimeout(() => {
       window.print();
     }, 300);
-  }, []);
+  }, [pointAttachmentsMap]);
 
   useEffect(() => {
     if (!ready || !project || project.deletedAt !== null) return;
     if (searchParams.print === "1" && printTriggeredRef.current !== project.id) {
       printTriggeredRef.current = project.id;
-      handlePrintPdf();
+      void handlePrintPdf();
     }
   }, [ready, project, searchParams.print, handlePrintPdf]);
 
@@ -264,26 +285,7 @@ function ProjectWorkspacePage() {
   }
 
   const activeProject = project;
-  const flowDirty = processFlowDraft !== activeProject.processFlow;
   const statusMeta = PROJECT_STATUS_META[activeProject.status];
-
-  async function handleSaveProcessFlow() {
-    if (!flowDirty) return;
-    setSavingFlow(true);
-    try {
-      await saveProject({
-        ...activeProject,
-        processFlow: processFlowDraft,
-        updatedAt: currentTimestamp(),
-      });
-      await reload();
-      toast.success("Catatan alur proses disimpan");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal menyimpan alur proses.");
-    } finally {
-      setSavingFlow(false);
-    }
-  }
 
   async function handleAddFeature(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -392,7 +394,7 @@ function ProjectWorkspacePage() {
 
   return (
     <div className="w-full space-y-6">
-      <section className="space-y-4">
+      <section data-print-hide="true" className="space-y-4">
         <div
           data-print-hide="true"
           className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
@@ -405,7 +407,14 @@ function ProjectWorkspacePage() {
           <span className="truncate font-medium text-foreground">{activeProject.name}</span>
         </div>
 
-        <div className="arc-surface w-full rounded-2xl p-5 sm:p-6">
+        <div
+          id={`project-${activeProject.id}`}
+          className={cn(
+            "arc-surface w-full rounded-2xl p-5 sm:p-6",
+            highlightedTargetId === `project-${activeProject.id}` &&
+              "arc-target-highlight border-primary ring-2 ring-primary/25",
+          )}
+        >
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -460,7 +469,7 @@ function ProjectWorkspacePage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handlePrintPdf}
+                onClick={() => void handlePrintPdf()}
                 className="gap-1.5 rounded-xl"
               >
                 <Printer className="h-3.5 w-3.5" />
@@ -490,64 +499,7 @@ function ProjectWorkspacePage() {
         </div>
       </section>
 
-      <section
-        id={`project-${activeProject.id}`}
-        className={cn(
-          "arc-surface w-full space-y-4 rounded-2xl p-5 sm:p-6",
-          highlightedTargetId === `project-${activeProject.id}` &&
-            "arc-target-highlight border-primary ring-2 ring-primary/25",
-        )}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Workflow className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold">Alur Proses Proyek</h2>
-          </div>
-          <div data-print-hide="true" className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {savingFlow ? "Menyimpan..." : flowDirty ? "Belum disimpan" : "Tersimpan"}
-            </span>
-            {flowDirty && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void handleSaveProcessFlow()}
-                disabled={savingFlow}
-                className="h-7 rounded-lg px-3 text-xs"
-              >
-                Simpan Alur
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="project-process-flow" className="sr-only">
-            Catatan Alur Proses Proyek
-          </Label>
-          <Textarea
-            id="project-process-flow"
-            value={processFlowDraft}
-            onChange={(event) => setProcessFlowDraft(event.target.value)}
-            onBlur={() => {
-              if (flowDirty) void handleSaveProcessFlow();
-            }}
-            placeholder="Tuliskan alur proses utama dari awal hingga akhir (contoh: 1. Pelanggan mengisi formulir -> 2. Verifikasi tim admin -> 3. Persetujuan)..."
-            rows={5}
-            className="w-full resize-y bg-background leading-relaxed"
-          />
-        </div>
-
-        <AttachmentGallery
-          ownerType="project"
-          ownerId={activeProject.id}
-          projectId={activeProject.id}
-          title="Lampiran Gambar / Diagram Alur Proses"
-          emptyLabel="Belum ada lampiran alur proses. Seret gambar diagram/tangkapan layar ke sini atau klik tambah."
-        />
-      </section>
-
-      <section id="fitur" className="w-full space-y-4">
+      <section id="fitur" data-print-hide="true" className="w-full space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Layers className="h-4 w-4 text-primary" />
@@ -584,8 +536,7 @@ function ProjectWorkspacePage() {
             <Layers className="mx-auto h-8 w-8 text-muted-foreground/50" />
             <h3 className="mt-3 text-base font-semibold">Belum ada fitur pada proyek ini</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Tambahkan fitur di kolom atas untuk mulai mencatat alur fitur, gambar, dan daftar
-              poin kebutuhan pelanggan.
+              Tambahkan fitur di kolom atas untuk mulai mencatat daftar poin kebutuhan pelanggan.
             </p>
           </div>
         ) : (
@@ -698,10 +649,6 @@ function ProjectWorkspacePage() {
                     <h3 className="mt-3 text-base font-semibold tracking-tight text-foreground">
                       {feature.name}
                     </h3>
-
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                      {feature.flowNotes || "Belum ada catatan alur fitur."}
-                    </p>
                   </div>
 
                   <div className="mt-5 space-y-3 border-t pt-3.5">
@@ -740,58 +687,16 @@ function ProjectWorkspacePage() {
             })}
           </div>
         )}
-
-        {/* Print-only structured breakdown of all features & points for full project PDF export */}
-        {projectFeatures.length > 0 && (
-          <div className="hidden space-y-6" data-print-only="true">
-            {projectFeatures.map((feature, idx) => {
-              const points = pointsByFeature.get(feature.id) ?? [];
-              return (
-                <div key={feature.id} className="print-avoid-break rounded-xl border p-4">
-                  <h3 className="text-base font-semibold">
-                    {idx + 1}. {feature.name}
-                  </h3>
-                  {feature.flowNotes && (
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                      {feature.flowNotes}
-                    </p>
-                  )}
-                  {points.length > 0 ? (
-                    <table className="mt-3 w-full border-collapse text-left text-xs">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="py-1.5 pr-2">No</th>
-                          <th className="py-1.5 pr-2">Poin Pelanggan</th>
-                          <th className="py-1.5 pr-2">Sumber</th>
-                          <th className="py-1.5 pr-2">Narasumber</th>
-                          <th className="py-1.5">Tanggal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {points.map((pt, ptIdx) => (
-                          <tr key={pt.id} className="border-b last:border-0">
-                            <td className="py-1.5 pr-2 align-top">{ptIdx + 1}</td>
-                            <td className="py-1.5 pr-2 align-top whitespace-pre-wrap">{pt.content}</td>
-                            <td className="py-1.5 pr-2 align-top">
-                              {POINT_SOURCE_META[pt.source].label}
-                            </td>
-                            <td className="py-1.5 pr-2 align-top">{pt.statedBy || "—"}</td>
-                            <td className="py-1.5 align-top">
-                              {pt.mentionedOn ? formatDateId(pt.mentionedOn) : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p className="mt-2 text-xs text-muted-foreground">Belum ada poin pelanggan.</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </section>
+
+      <CustomerPdfReport
+        mode="project"
+        project={activeProject}
+        features={projectFeatures}
+        pointsByFeature={pointsByFeature}
+        attachmentsByPoint={pointAttachmentsMap}
+        thumbnails={printThumbnails}
+      />
 
       <ProjectFormDialog
         open={editProjectOpen}

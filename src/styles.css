@@ -231,6 +231,11 @@
   }
 }
 
+@page {
+  size: A4 portrait;
+  margin: 15mm 14mm 17mm 14mm;
+}
+
 @media print {
   [data-print-hide="true"] {
     display: none !important;
@@ -240,18 +245,48 @@
     display: block !important;
   }
 
+  html,
   body {
     background: #ffffff !important;
-    color: #111827 !important;
+    color: #0f172a !important;
+  }
+
+  main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .pdf-report,
+  .pdf-report * {
+    font-family: "Times New Roman", Times, Georgia, serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .pdf-report table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .pdf-report thead {
+    display: table-header-group;
+  }
+
+  .pdf-report tr,
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .pdf-report h2,
+  .pdf-report h3 {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   .arc-surface {
     box-shadow: none !important;
     border-color: #d1d5db !important;
-  }
-
-  .print-avoid-break {
-    break-inside: avoid;
-    page-break-inside: avoid;
   }
 }

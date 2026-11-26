@@ -50,7 +50,6 @@ export function ProjectFormDialog({
   const [customerName, setCustomerName] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("active");
   const [description, setDescription] = useState("");
-  const [processFlow, setProcessFlow] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,7 +59,6 @@ export function ProjectFormDialog({
     setCustomerName(project?.customerName ?? "");
     setStatus(project?.status ?? "active");
     setDescription(project?.description ?? "");
-    setProcessFlow(project?.processFlow ?? "");
     setError(null);
   }, [open, project]);
 
@@ -83,7 +81,6 @@ export function ProjectFormDialog({
             customerName: customerName.trim(),
             status,
             description: description.trim(),
-            processFlow: processFlow.trim(),
             updatedAt: now,
           }
         : {
@@ -92,7 +89,7 @@ export function ProjectFormDialog({
             customerName: customerName.trim(),
             status,
             description: description.trim(),
-            processFlow: processFlow.trim(),
+            processFlow: "",
             createdAt: now,
             updatedAt: now,
             deletedAt: null,
@@ -117,8 +114,8 @@ export function ProjectFormDialog({
           <DialogTitle>{isEditing ? "Edit Detail Proyek" : "Buat Proyek Baru"}</DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Perbarui identitas proyek, nama pelanggan, status, atau ringkasan alur."
-              : "Dokumentasikan alur proses dan kebutuhan pelanggan proyek ini secara lokal."}
+              ? "Perbarui identitas proyek, nama pelanggan, status, atau deskripsi singkat."
+              : "Dokumentasikan identitas proyek dan fitur kebutuhan pelanggan ke database Supabase."}
           </DialogDescription>
         </DialogHeader>
 
@@ -178,19 +175,6 @@ export function ProjectFormDialog({
               rows={2}
             />
           </div>
-
-          {!isEditing && (
-            <div className="space-y-1.5">
-              <Label htmlFor="project-flow">Catatan Alur Proses Awal (Opsional)</Label>
-              <Textarea
-                id="project-flow"
-                value={processFlow}
-                onChange={(event) => setProcessFlow(event.target.value)}
-                placeholder="Contoh: 1. Pelanggan masuk -> 2. Isi pengajuan -> 3. Verifikasi admin..."
-                rows={3}
-              />
-            </div>
-          )}
 
           <DialogFooter className="pt-2">
             <Button

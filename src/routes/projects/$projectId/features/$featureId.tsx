@@ -18,13 +18,13 @@ import {
   Printer,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AttachmentGallery } from "@/components/AttachmentGallery";
+import { CustomerPdfReport } from "@/components/CustomerPdfReport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -125,14 +125,11 @@ function FeatureDetailPage() {
 
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  const [flowNotesDraft, setFlowNotesDraft] = useState("");
-  const [savingNotes, setSavingNotes] = useState(false);
 
   const [pointContent, setPointContent] = useState("");
   const [pointMentionedOn, setPointMentionedOn] = useState("");
   const [pointSource, setPointSource] = useState<PointSource>("Meeting");
   const [pointStatedBy, setPointStatedBy] = useState("");
-  const [showPointMeta, setShowPointMeta] = useState(false);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [addingPoint, setAddingPoint] = useState(false);
 
@@ -256,41 +253,13 @@ function FeatureDetailPage() {
   }, [pointAttachmentIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentFeatureName = feature?.name ?? "";
-  const currentFeatureFlowNotes = feature?.flowNotes ?? "";
   const currentFeatureId = feature?.id ?? "";
 
   useEffect(() => {
     if (currentFeatureId) {
       setNameDraft(currentFeatureName);
-      setFlowNotesDraft(currentFeatureFlowNotes);
     }
-  }, [currentFeatureId, currentFeatureName, currentFeatureFlowNotes]);
-
-  useEffect(() => {
-    if (!ready || !project || !feature || project.deletedAt !== null || feature.deletedAt !== null) {
-      return;
-    }
-    if (flowNotesDraft === feature.flowNotes) return;
-
-    const timer = window.setTimeout(() => {
-      setSavingNotes(true);
-      void saveFeature({
-        ...feature,
-        flowNotes: flowNotesDraft,
-        updatedAt: currentTimestamp(),
-      })
-        .then(() => touchProject(project.id))
-        .then(() => reload())
-        .catch(() => {
-          // Handled on explicit save/blur if storage fails
-        })
-        .finally(() => {
-          setSavingNotes(false);
-        });
-    }, 600);
-
-    return () => window.clearTimeout(timer);
-  }, [ready, project, feature, flowNotesDraft, reload]);
+  }, [currentFeatureId, currentFeatureName]);
 
   useEffect(() => {
     const target = searchParams.target;
@@ -325,6 +294,10 @@ function FeatureDetailPage() {
   }, [points, tableQuery, tableSourceFilter]);
 
   const isFiltered = tableQuery.trim() !== "" || tableSourceFilter !== "all";
+  const printPointsMap = useMemo(
+    () => new Map([[featureId, isFiltered ? filteredPoints : points]]),
+    [featureId, isFiltered, filteredPoints, points],
+  );
 
   if (!ready) {
     return (
@@ -383,7 +356,6 @@ function FeatureDetailPage() {
 
   const activeFeature = feature;
   const activeProject = project;
-  const notesDirty = flowNotesDraft !== activeFeature.flowNotes;
 
   async function handleRenameSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -404,25 +376,6 @@ function FeatureDetailPage() {
       toast.success("Nama fitur diperbarui");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Gagal mengubah nama fitur.");
-    }
-  }
-
-  async function handleSaveNotes() {
-    if (!notesDirty) return;
-    setSavingNotes(true);
-    try {
-      await saveFeature({
-        ...activeFeature,
-        flowNotes: flowNotesDraft,
-        updatedAt: currentTimestamp(),
-      });
-      await touchProject(activeProject.id);
-      await reload();
-      toast.success("Catatan alur fitur tersimpan");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Gagal menyimpan catatan fitur.");
-    } finally {
-      setSavingNotes(false);
     }
   }
 
@@ -631,7 +584,7 @@ function FeatureDetailPage() {
 
   return (
     <div className="w-full space-y-6">
-      <section className="space-y-4">
+      <section data-print-hide="true" className="space-y-4">
         <div
           data-print-hide="true"
           className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
@@ -657,7 +610,7 @@ function FeatureDetailPage() {
           className={cn(
             "arc-surface w-full rounded-2xl p-5 sm:p-6",
             highlightedTargetId === `feature-${activeFeature.id}` &&
-              "arc-target-highlight border-primary ring-2 ring-primary/25",
+            "arc-target-highlight border-primary ring-2 ring-primary/25",
           )}
         >
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -728,7 +681,12 @@ function FeatureDetailPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => window.print()}
+                onClick={() => {
+                  toast.info("Menyiapkan laporan PDF pelanggan...", { duration: 2500 });
+                  window.setTimeout(() => {
+                    window.print();
+                  }, 250);
+                }}
                 className="gap-1.5 rounded-xl"
               >
                 <Printer className="h-3.5 w-3.5" />
@@ -762,54 +720,7 @@ function FeatureDetailPage() {
         </div>
       </section>
 
-      <section className="arc-surface w-full space-y-4 rounded-2xl p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-2">
-          <Label
-            htmlFor="feature-flow-notes"
-            className="text-sm font-semibold text-foreground"
-          >
-            Catatan Alur Fitur
-          </Label>
-          <div data-print-hide="true" className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {savingNotes ? "Menyimpan..." : notesDirty ? "Belum disimpan" : "Tersimpan"}
-            </span>
-            {notesDirty && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void handleSaveNotes()}
-                disabled={savingNotes}
-                className="h-7 rounded-lg px-3 text-xs"
-              >
-                Simpan Catatan
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <Textarea
-          id="feature-flow-notes"
-          value={flowNotesDraft}
-          onChange={(event) => setFlowNotesDraft(event.target.value)}
-          onBlur={() => {
-            if (notesDirty) void handleSaveNotes();
-          }}
-          placeholder="Jelaskan alur kerja, validasi, atau aturan bisnis khusus untuk fitur ini..."
-          rows={3}
-          className="w-full resize-y bg-background"
-        />
-
-        <AttachmentGallery
-          ownerType="feature"
-          ownerId={activeFeature.id}
-          projectId={activeProject.id}
-          title="Lampiran Gambar Fitur"
-          emptyLabel="Belum ada lampiran gambar fitur. Seret gambar ke sini atau klik tambah."
-        />
-      </section>
-
-      <section className="arc-surface w-full space-y-4 rounded-2xl p-5 sm:p-6">
+      <section data-print-hide="true" className="arc-surface w-full space-y-4 rounded-2xl p-5 sm:p-6">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h2 className="text-base font-semibold">
@@ -859,10 +770,14 @@ function FeatureDetailPage() {
             event.preventDefault();
             void submitNewPoint();
           }}
-          className="arc-inset space-y-2.5 rounded-xl p-3"
+          className="arc-inset space-y-3 rounded-xl p-4"
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="new-point-content" className="text-xs font-medium text-foreground">
+              Poin Kebutuhan
+            </Label>
             <Textarea
+              id="new-point-content"
               value={pointContent}
               onChange={(event) => setPointContent(event.target.value)}
               onKeyDown={(event) => {
@@ -871,13 +786,62 @@ function FeatureDetailPage() {
                   void submitNewPoint();
                 }
               }}
-              placeholder="Tambah cepat poin pelanggan... (Enter untuk simpan, Shift+Enter baris baru)"
+              placeholder="Tuliskan poin kebutuhan pelanggan... (Enter untuk simpan, Shift+Enter baris baru)"
               rows={2}
               aria-label="Tambah poin kebutuhan pelanggan"
-              className="min-h-[56px] flex-1 bg-background text-sm"
+              className="min-h-[60px] w-full bg-background text-sm"
             />
+          </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
+            <div className="space-y-1.5 sm:col-span-3">
+              <Label htmlFor="new-point-source" className="text-xs font-medium text-foreground">
+                Sumber
+              </Label>
+              <Select
+                value={pointSource}
+                onValueChange={(value) => setPointSource(value as PointSource)}
+              >
+                <SelectTrigger id="new-point-source" className="h-9 bg-background text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {POINT_SOURCES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {POINT_SOURCE_META[item].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-4">
+              <Label htmlFor="new-point-speaker" className="text-xs font-medium text-foreground">
+                Narasumber
+              </Label>
+              <Input
+                id="new-point-speaker"
+                value={pointStatedBy}
+                onChange={(event) => setPointStatedBy(event.target.value)}
+                placeholder="Masukkan nama narasumber (opsional)"
+                className="h-9 bg-background text-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="new-point-date" className="text-xs font-medium text-foreground">
+                Tanggal
+              </Label>
+              <Input
+                id="new-point-date"
+                type="date"
+                value={pointMentionedOn}
+                onChange={(event) => setPointMentionedOn(event.target.value)}
+                className="h-9 bg-background text-sm"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 sm:col-span-3">
               <input
                 ref={quickImageInputRef}
                 type="file"
@@ -892,26 +856,15 @@ function FeatureDetailPage() {
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
                 onClick={() => quickImageInputRef.current?.click()}
                 title="Lampirkan gambar pada poin ini"
                 aria-label="Lampirkan gambar pada poin baru"
-                className="h-9 w-9 bg-background"
+                className="h-9 gap-1.5 bg-background px-3 text-xs"
               >
                 <ImagePlus className="h-4 w-4" />
+                <span>Gambar</span>
               </Button>
-              <Button
-                type="button"
-                variant={showPointMeta ? "secondary" : "outline"}
-                size="icon"
-                onClick={() => setShowPointMeta((prev) => !prev)}
-                title="Tanggal, sumber & narasumber"
-                aria-label="Atur tanggal, sumber, dan narasumber poin"
-                className="h-9 w-9 bg-background"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-              </Button>
-              <Button type="submit" disabled={addingPoint} className="h-9 gap-1.5 rounded-lg">
+              <Button type="submit" disabled={addingPoint} className="h-9 flex-1 gap-1.5 rounded-lg sm:flex-none">
                 <Plus className="h-4 w-4" />
                 <span>{addingPoint ? "Menyimpan..." : "Tambah Poin"}</span>
               </Button>
@@ -939,51 +892,6 @@ function FeatureDetailPage() {
                   </button>
                 </Badge>
               ))}
-            </div>
-          )}
-
-          {showPointMeta && (
-            <div className="grid grid-cols-1 gap-2 border-t pt-2.5 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Tanggal Disebutkan</Label>
-                <Input
-                  type="date"
-                  value={pointMentionedOn}
-                  onChange={(event) => setPointMentionedOn(event.target.value)}
-                  className="h-8 bg-background text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Sumber</Label>
-                <Select
-                  value={pointSource}
-                  onValueChange={(value) => setPointSource(value as PointSource)}
-                >
-                  <SelectTrigger className="h-8 bg-background text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POINT_SOURCES.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {POINT_SOURCE_META[item].label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">
-                  Disampaikan Oleh (Opsional)
-                </Label>
-                <Input
-                  value={pointStatedBy}
-                  onChange={(event) => setPointStatedBy(event.target.value)}
-                  placeholder="Contoh: Bu Ratna"
-                  className="h-8 bg-background text-xs"
-                />
-              </div>
             </div>
           )}
         </form>
@@ -1213,6 +1121,15 @@ function FeatureDetailPage() {
           </div>
         )}
       </section>
+
+      <CustomerPdfReport
+        mode="feature"
+        project={activeProject}
+        features={[activeFeature]}
+        pointsByFeature={printPointsMap}
+        attachmentsByPoint={pointAttachmentsMap}
+        thumbnails={pointThumbnails}
+      />
 
       {/* Edit Poin Dialog */}
       <Dialog
